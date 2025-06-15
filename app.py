@@ -3,6 +3,7 @@ from flask_cors import CORS
 from pymongo import MongoClient
 import os
 import requests
+import json
 from datetime import datetime
 
 app = Flask(__name__)
@@ -26,15 +27,15 @@ HEADERS = {
 
 PROMPT_TEMPLATE = """
 You are StartupGPT, a startup co-pilot AI. The user will give you an app or startup idea.
-Based on the idea, generate:
+Based on the idea, generate strictly valid and escaped JSON:
 1. A 2-3 sentence elevator pitch.
-2. A simple landing page in HTML (with inline CSS).
+2. A simple landing page in HTML (with inline CSS; ensure all quotes are escaped).
 3. A recommended tech stack.
 4. 3 unique core feature suggestions.
 
 Idea: {idea}
 
-Respond in this JSON format:
+Respond ONLY in this JSON format:
 {{
   "pitch": "...",
   "landing_page_html": "...",
@@ -67,7 +68,7 @@ def generate():
         response.raise_for_status()
 
         content = response.json()["choices"][0]["message"]["content"]
-        result = eval(content)
+        result = json.loads(content)  # ✅ Safe JSON parsing
 
         # Add metadata
         result["idea"] = idea
