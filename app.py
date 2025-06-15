@@ -26,22 +26,18 @@ HEADERS = {
 }
 
 PROMPT_TEMPLATE = """
-You are StartupGPT, a startup co-pilot AI. The user will give you an app or startup idea.
-Based on the idea, generate strictly valid and escaped JSON:
-1. A 2-3 sentence elevator pitch.
-2. A simple landing page in HTML (with inline CSS; ensure all quotes are escaped).
-3. A recommended tech stack.
-4. 3 unique core feature suggestions.
+You are StartupGPT, a startup co-pilot AI. You will receive a startup idea and must respond ONLY with valid JSON. 
+Do not include markdown formatting, ```json blocks, or any commentary. All quotes must be escaped properly.
 
-Idea: {idea}
-
-Respond ONLY in this JSON format:
+Only return a valid JSON response like this:
 {{
   "pitch": "...",
   "landing_page_html": "...",
   "tech_stack": "...",
   "core_features": ["...", "...", "..."]
 }}
+
+Startup Idea: {idea}
 """
 
 @app.route("/generate", methods=["POST"])
@@ -60,15 +56,19 @@ def generate():
                 "content": PROMPT_TEMPLATE.format(idea=idea)
             }
         ],
-        "temperature": 0.8
+        "temperature": 0.7
     }
 
     try:
         response = requests.post(GROQ_API_URL, headers=HEADERS, json=payload)
         response.raise_for_status()
 
-        content = response.json()["choices"][0]["message"]["content"]
-        result = json.loads(content)  # ✅ Safe JSON parsing
+        groq_response = response.json()
+        content = groq_response["choices"][0]["message"]["content"]
+
+        print("🔍 RAW GROQ RESPONSE:\n", content)
+
+        result = json.loads(content)  # Safely parse JSON
 
         # Add metadata
         result["idea"] = idea
@@ -78,8 +78,21 @@ def generate():
         collection.insert_one(result)
 
         return jsonify(result)
+
+    except json.JSONDecodeError as je:
+        print("❌ JSON PARSE ERROR:", je)
+        print("⚠️ Full Groq response object:", response.text)
+        return jsonify({
+            "error": "Failed to parse Groq response as JSON",
+            "details": str(je)
+        }), 500
+
     except Exception as e:
-        return jsonify({"error": "Failed to generate or parse Groq response", "details": str(e)}), 500
+        print("❌ Other error:", e)
+        return jsonify({
+            "error": "Failed to generate or parse Groq response",
+            "details": str(e)
+        }), 500
 
 if __name__ == "__main__":
     app.run(debug=True)
